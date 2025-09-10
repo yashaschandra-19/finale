@@ -1,0 +1,440 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Wristband — VFX & Video Dashboard</title>
+  <style>
+    /* ---------------------------------------------
+       Wristband VFX Dashboard - single-file
+       HTML + CSS + JS
+       Features:
+       - Sidebar navigation
+       - Project / Video gallery
+       - Upload (drag & drop + file input)
+       - Team members panel
+       - Preview modal with simple CSS "VFX" filters
+       - Local persistence via localStorage (uploads)
+    ---------------------------------------------*/
+
+    :root{
+      --bg: #0f1724; /* deep navy */
+      --card: #0f1b2a;
+      --muted: #9aa8bf;
+      --accent: #7c5cff; /* wristband purple */
+      --accent-2: #00d4ff; /* cyan */
+      --glass: rgba(255,255,255,0.04);
+      --glass-2: rgba(255,255,255,0.02);
+      --success: #39d98a;
+      --danger:#ff6b6b;
+      color-scheme: dark;
+    }
+
+    *{box-sizing:border-box}
+    html,body{height:100%;margin:0;font-family:Inter,ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,'Helvetica Neue',Arial}
+    body{background:linear-gradient(180deg,var(--bg),#071024 70%);color:#e6eef8}
+
+    .app{display:grid;grid-template-columns:260px 1fr;min-height:100vh}
+
+    /* Sidebar */
+    .sidebar{padding:22px;background:linear-gradient(180deg,rgba(124,92,255,0.06),transparent);border-right:1px solid rgba(255,255,255,0.03)}
+    .brand{display:flex;gap:12px;align-items:center;margin-bottom:18px}
+    .logo{width:44px;height:44px;border-radius:10px;background:linear-gradient(135deg,var(--accent),var(--accent-2));display:grid;place-items:center;font-weight:700}
+    .brand h1{font-size:16px;margin:0}
+    .brand p{margin:0;font-size:12px;color:var(--muted)}
+
+    nav{margin-top:18px}
+    .nav-item{display:flex;align-items:center;gap:12px;padding:10px;border-radius:10px;color:var(--muted);cursor:pointer}
+    .nav-item:hover{background:var(--glass);color:var(--accent)}
+    .nav-item.active{background:linear-gradient(90deg,rgba(124,92,255,0.12),rgba(0,212,255,0.06));color:var(--accent)}
+
+    /* Main */
+    .main{padding:20px}
+    .topbar{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:18px}
+    .search{display:flex;gap:10px;align-items:center;background:var(--glass);padding:8px;border-radius:10px;width:480px}
+    .search input{background:transparent;border:none;outline:none;color:inherit;width:100%}
+
+    .controls{display:flex;gap:10px;align-items:center}
+    .btn{padding:8px 12px;border-radius:8px;border:none;background:linear-gradient(90deg,var(--accent),#6b57ff);color:white;cursor:pointer}
+    .btn.ghost{background:transparent;border:1px solid rgba(255,255,255,0.06)}
+
+    /* Grid */
+    .grid{display:grid;grid-template-columns:1fr 320px;gap:18px}
+
+    /* Projects area */
+    .projects{background:linear-gradient(180deg,rgba(255,255,255,0.02),transparent);padding:16px;border-radius:12px}
+    .projects-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+    .project-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}
+    .card{background:var(--card);padding:10px;border-radius:10px;border:1px solid rgba(255,255,255,0.02)}
+    .thumb{height:120px;border-radius:8px;background:#081220;overflow:hidden;display:flex;align-items:center;justify-content:center}
+    .thumb video, .thumb img{max-width:100%;max-height:100%;display:block}
+    .meta{display:flex;justify-content:space-between;align-items:center;margin-top:8px}
+    .tags{font-size:12px;color:var(--muted)}
+
+    /* Upload area */
+    .uploader{margin-top:12px;padding:12px;border-radius:10px;border:1px dashed rgba(255,255,255,0.04);background:linear-gradient(180deg,var(--glass-2),transparent);min-height:110px;display:flex;flex-direction:column;gap:10px;align-items:center;justify-content:center}
+    .uploader.drag{border-color:rgba(124,92,255,0.6);box-shadow:0 6px 20px rgba(124,92,255,0.06)}
+
+    /* Right column */
+    .right-panel{background:linear-gradient(180deg,rgba(255,255,255,0.02),transparent);padding:14px;border-radius:12px;height:100%}
+    .team{display:flex;flex-direction:column;gap:12px}
+    .member{display:flex;gap:12px;align-items:center}
+    .avatar{width:44px;height:44px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--accent-2));display:grid;place-items:center;font-weight:700}
+
+    /* modal */
+    .modal{position:fixed;inset:0;background:rgba(0,0,0,0.6);display:none;align-items:center;justify-content:center;padding:20px}
+    .modal.show{display:flex}
+    .modal-card{background:#071223;padding:12px;border-radius:12px;max-width:1100px;width:100%;box-shadow:0 12px 40px rgba(2,6,23,0.7)}
+    .modal-top{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:8px}
+    .video-wrap{background:#000;border-radius:8px;overflow:hidden}
+    .video-wrap video{width:100%;height:480px;background:#000}
+    .filter-controls{display:flex;gap:8px;align-items:center}
+    .chip{padding:6px 8px;border-radius:999px;border:1px solid rgba(255,255,255,0.04);cursor:pointer}
+    .chip.active{background:linear-gradient(90deg,var(--accent),var(--accent-2));color:#071223}
+
+    /* small screens */
+    @media (max-width:880px){.app{grid-template-columns:1fr}.sidebar{display:none}.grid{grid-template-columns:1fr}.search{width:100%}}
+
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="logo">WB</div>
+        <div>
+          <h1>Wristband</h1>
+          <p>VFX & Video Dashboard</p>
+        </div>
+      </div>
+      <nav>
+        <div class="nav-item active" data-view="projects">📁 Projects</div>
+        <div class="nav-item" data-view="uploads">⬆️ Uploads</div>
+        <div class="nav-item" data-view="team">👥 Team</div>
+        <div class="nav-item" data-view="settings">⚙️ Settings</div>
+      </nav>
+      <div style="margin-top:18px;font-size:12px;color:var(--muted);">Quick stats</div>
+      <div style="margin-top:8px;display:flex;flex-direction:column;gap:8px">
+        <div class="card" style="padding:10px;display:flex;justify-content:space-between;align-items:center">
+          <div>
+            <div style="font-size:12px;color:var(--muted)">Projects</div>
+            <div id="stat-projects">0</div>
+          </div>
+          <div style="text-align:right">
+            <div style="font-size:12px;color:var(--muted)">Uploads</div>
+            <div id="stat-uploads">0</div>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <main class="main">
+      <div class="topbar">
+        <div class="search"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M21 21l-4.35-4.35"/><circle cx="11" cy="11" r="6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg><input id="q" placeholder="Search projects, team or tags..."/></div>
+        <div class="controls">
+          <button class="btn ghost" id="import-sample">Import sample projects</button>
+          <button class="btn" id="new-project">New Project</button>
+        </div>
+      </div>
+
+      <div class="grid">
+        <section class="projects" id="view-projects">
+          <div class="projects-header">
+            <h3 style="margin:0">Projects & Videos</h3>
+            <div style="font-size:13px;color:var(--muted)"><span id="count-projects">0</span> items — <span id="count-videos">0</span> videos</div>
+          </div>
+
+          <div class="uploader" id="uploader">
+            <div style="font-size:13px;color:var(--muted)">Drag & drop videos or images here to upload</div>
+            <div style="display:flex;gap:8px;align-items:center">
+              <label class="btn" for="file-input">Choose files</label>
+              <input id="file-input" type="file" accept="video/*,image/*" multiple style="display:none" />
+              <button class="btn ghost" id="clear-storage">Clear All</button>
+            </div>
+          </div>
+
+          <div style="margin-top:12px" class="project-list" id="project-list"></div>
+
+        </section>
+
+        <aside class="right-panel">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+            <h4 style="margin:0">Team</h4>
+            <button class="btn ghost" id="invite">Invite</button>
+          </div>
+          <div class="team" id="team-list"></div>
+
+          <div style="margin-top:14px">
+            <h4 style="margin:0">Filters & Quick VFX</h4>
+            <div style="margin-top:8px;display:flex;gap:8px" id="quick-filters">
+              <div class="chip" data-filter="none">None</div>
+              <div class="chip" data-filter="bw">Black & White</div>
+              <div class="chip" data-filter="glow">Glow</div>
+              <div class="chip" data-filter="cine">Cinematic</div>
+            </div>
+          </div>
+
+        </aside>
+      </div>
+
+      <!-- Modal preview -->
+      <div class="modal" id="modal">
+        <div class="modal-card">
+          <div class="modal-top">
+            <div>
+              <strong id="modal-title">Preview</strong>
+              <div style="font-size:12px;color:var(--muted)" id="modal-sub">Filename • duration</div>
+            </div>
+            <div style="display:flex;gap:8px;align-items:center">
+              <div class="filter-controls" id="modal-filters"></div>
+              <button class="btn ghost" id="close-modal">Close</button>
+            </div>
+          </div>
+          <div class="video-wrap" id="modal-content"></div>
+        </div>
+      </div>
+
+    </main>
+  </div>
+
+  <script>
+    /* ---------------------------------------------
+       Simple single-file dashboard logic
+    ---------------------------------------------*/
+
+    // Sample team members
+    const TEAM = [
+      {id:1,name:'Asha Verma',role:'Lead Compositor'},
+      {id:2,name:'Rahul Sen',role:'Editor / VFX Artist'},
+      {id:3,name:'Maya Iyer',role:'Motion Designer'},
+      {id:4,name:'Karan Patel',role:'Rotoscoping Lead'}
+    ];
+
+    // Storage keys
+    const STORAGE_KEY = 'wristband_uploads_v1';
+
+    // App state
+    let uploads = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+
+    // Elements
+    const projectList = document.getElementById('project-list');
+    const teamList = document.getElementById('team-list');
+    const uploader = document.getElementById('uploader');
+    const fileInput = document.getElementById('file-input');
+    const q = document.getElementById('q');
+    const modal = document.getElementById('modal');
+    const modalContent = document.getElementById('modal-content');
+    const modalTitle = document.getElementById('modal-title');
+    const modalSub = document.getElementById('modal-sub');
+    const modalFilters = document.getElementById('modal-filters');
+
+    // init
+    function init(){
+      renderTeam();
+      renderList();
+      updateStats();
+      bindUI();
+    }
+
+    function bindUI(){
+      // navigation
+      document.querySelectorAll('.nav-item').forEach(el=>el.addEventListener('click',()=>{
+        document.querySelectorAll('.nav-item').forEach(x=>x.classList.remove('active'));
+        el.classList.add('active');
+        // simple view switch (for future)
+      }));
+
+      // drag + drop
+      ['dragenter','dragover'].forEach(ev=>uploader.addEventListener(ev,e=>{
+        e.preventDefault();e.stopPropagation();uploader.classList.add('drag');
+      }));
+      ['dragleave','drop'].forEach(ev=>uploader.addEventListener(ev,e=>{
+        e.preventDefault();e.stopPropagation();uploader.classList.remove('drag');
+      }));
+      uploader.addEventListener('drop', async (e)=>{
+        const files = Array.from(e.dataTransfer.files || []);
+        await handleFiles(files);
+      });
+
+      // file input
+      fileInput.addEventListener('change', async (e)=>{
+        const files = Array.from(e.target.files || []);
+        await handleFiles(files);
+        fileInput.value = '';
+      });
+
+      // search
+      q.addEventListener('input', ()=>renderList());
+
+      // clear
+      document.getElementById('clear-storage').addEventListener('click', ()=>{
+        if(confirm('Clear all uploaded items?')){uploads=[];persist();renderList();updateStats();}
+      });
+
+      // close modal
+      document.getElementById('close-modal').addEventListener('click', closeModal);
+      modal.addEventListener('click', (e)=>{if(e.target===modal) closeModal();});
+
+      // quick filters
+      document.querySelectorAll('#quick-filters .chip').forEach(el=>el.addEventListener('click',()=>{
+        document.querySelectorAll('#quick-filters .chip').forEach(c=>c.classList.remove('active'));
+        el.classList.add('active');
+        // one-click: apply preview to the first video
+        const first = uploads[0];
+        if(first) openPreview(first.id, el.dataset.filter);
+      }));
+
+      // import sample
+      document.getElementById('import-sample').addEventListener('click', importSample);
+
+      document.getElementById('new-project').addEventListener('click', ()=>{
+        const name = prompt('Name for new project');
+        if(name){
+          const p = {id:Date.now(),type:'project',name,items:[],created:new Date().toISOString()};
+          uploads.unshift(p);persist();renderList();updateStats();
+        }
+      });
+
+      document.getElementById('invite').addEventListener('click', ()=>alert('Invite link generation not implemented in demo.'));
+    }
+
+    function persist(){localStorage.setItem(STORAGE_KEY, JSON.stringify(uploads));}
+
+    async function handleFiles(files){
+      if(!files.length) return;
+      for(const file of files){
+        const type = file.type.startsWith('video') ? 'video' : (file.type.startsWith('image') ? 'image' : 'file');
+        const id = Date.now()+Math.floor(Math.random()*999);
+        // create object URL for preview (not stored permanently)
+        const url = URL.createObjectURL(file);
+        const item = {id,name:file.name,type,mime:file.type,url,created:new Date().toISOString(),size:file.size};
+        uploads.unshift(item);
+      }
+      persist();
+      renderList();
+      updateStats();
+    }
+
+    function renderList(){
+      const query = q.value.trim().toLowerCase();
+      const visible = uploads.filter(u=>{
+        if(!query) return true;
+        return (u.name && u.name.toLowerCase().includes(query)) || (u.type && u.type.toLowerCase().includes(query));
+      });
+
+      document.getElementById('count-projects').textContent = uploads.filter(x=>x.type==='project').length;
+      document.getElementById('count-videos').textContent = uploads.filter(x=>x.type==='video').length;
+
+      projectList.innerHTML = '';
+      if(!visible.length){projectList.innerHTML = '<div style="color:var(--muted);padding:20px">No items yet. Upload files to see them here.</div>';return}
+
+      for(const item of visible){
+        const card = document.createElement('div');card.className='card';
+        const thumb = document.createElement('div');thumb.className='thumb';
+
+        if(item.type==='video'){
+          const v = document.createElement('video');v.src = item.url;v.muted=true;v.playsInline=true;v.loop=true;v.autoplay=true;thumb.appendChild(v);
+        } else if(item.type==='image'){
+          const img = document.createElement('img');img.src=item.url;thumb.appendChild(img);
+        } else {
+          thumb.innerHTML = '<div style="padding:10px;color:var(--muted)">FILE</div>';
+        }
+
+        const title = document.createElement('div');title.style.marginTop='8px';
+        title.innerHTML = `<div style="font-weight:600">${escapeHtml(item.name || item.name || 'Untitled')}</div><div class='tags'>${item.type.toUpperCase()} • ${humanSize(item.size||0)}</div>`;
+
+        const actions = document.createElement('div');actions.style.marginTop='8px';actions.style.display='flex';actions.style.justifyContent='space-between';
+        const left = document.createElement('div');
+        const btnPreview = document.createElement('button');btnPreview.className='btn ghost';btnPreview.textContent='Preview';btnPreview.addEventListener('click',()=>openPreview(item.id));
+        left.appendChild(btnPreview);
+        const btnDelete = document.createElement('button');btnDelete.className='btn ghost';btnDelete.textContent='Delete';btnDelete.style.marginLeft='8px';btnDelete.addEventListener('click',()=>{
+          if(confirm('Delete this item?')){uploads = uploads.filter(u=>u.id!==item.id);persist();renderList();updateStats();}
+        });
+        left.appendChild(btnDelete);
+
+        actions.appendChild(left);
+        card.appendChild(thumb);card.appendChild(title);card.appendChild(actions);
+        projectList.appendChild(card);
+      }
+    }
+
+    function openPreview(id, presetFilter){
+      const item = uploads.find(u=>u.id===id);
+      if(!item) return;
+      modal.classList.add('show');
+      modalTitle.textContent = item.name;
+      modalSub.textContent = `${item.type.toUpperCase()} • ${new Date(item.created).toLocaleString()}`;
+      modalContent.innerHTML = '';
+      modalFilters.innerHTML = '';
+
+      if(item.type==='video'){
+        const video = document.createElement('video');video.controls=true;video.src=item.url;video.autoplay=true;video.playsInline=true;video.crossOrigin='anonymous';
+        // default style
+        video.style.filter = '';
+        modalContent.appendChild(video);
+
+        // filter chips in modal
+        const filters = [
+          {key:'none',label:'None',fn:()=>video.style.filter=''},
+          {key:'bw',label:'Black & White',fn:()=>video.style.filter='grayscale(1)'},
+          {key:'glow',label:'Glow',fn:()=>video.style.filter='contrast(1.2) saturate(1.3) drop-shadow(0 0 10px rgba(124,92,255,0.25))'},
+          {key:'cine',label:'Cinematic',fn:()=>video.style.filter='contrast(1.1) saturate(0.9) brightness(0.95)'}
+        ];
+        for(const f of filters){
+          const c = document.createElement('div');c.className='chip';c.textContent=f.label;c.addEventListener('click',()=>{document.querySelectorAll('.modal-card .chip').forEach(x=>x.classList.remove('active'));c.classList.add('active');f.fn();});
+          modalFilters.appendChild(c);
+          // apply preset
+          if(presetFilter && f.key===presetFilter){c.classList.add('active');f.fn();}
+        }
+      } else if(item.type==='image'){
+        const img = document.createElement('img');img.src=item.url;img.style.maxWidth='100%';img.style.borderRadius='6px';modalContent.appendChild(img);
+      } else {
+        modalContent.innerHTML = '<div style="padding:20px;color:var(--muted)">No preview available</div>';
+      }
+    }
+
+    function closeModal(){modal.classList.remove('show');modalContent.innerHTML='';modalFilters.innerHTML='';}
+
+    function renderTeam(){
+      teamList.innerHTML='';
+      for(const m of TEAM){
+        const el = document.createElement('div');el.className='member card';
+        el.innerHTML = `<div class='avatar'>${m.name.split(' ').map(x=>x[0]).slice(0,2).join('')}</div><div style='flex:1'><div style='font-weight:600'>${m.name}</div><div style='font-size:12px;color:var(--muted)'>${m.role}</div></div><div style='font-size:12px;color:var(--muted)'>View</div>`;
+        el.addEventListener('click', ()=>alert('Open member profile for '+m.name));
+        teamList.appendChild(el);
+      }
+    }
+
+    function updateStats(){
+      document.getElementById('stat-projects').textContent = uploads.filter(x=>x.type==='project').length;
+      document.getElementById('stat-uploads').textContent = uploads.filter(x=>x.type!=='project').length;
+    }
+
+    function importSample(){
+      // small sample metadata (no real files) - placeholders use data urls
+      const sample = [
+        {id:111111,type:'video',name:'Warped City - edit.mp4',mime:'video/mp4',url:placeholderVideoURL(),size:12400000,created:new Date().toISOString()},
+        {id:111112,type:'video',name:'Neon Titles.mp4',mime:'video/mp4',url:placeholderVideoURL(1),size:4200000,created:new Date().toISOString()},
+        {id:111113,type:'image',name:'MattePainting.jpg',mime:'image/jpeg',url:placeholderImageURL(),size:540000,created:new Date().toISOString()},
+      ];
+      uploads = sample.concat(uploads);
+      persist();renderList();updateStats();
+    }
+
+    function placeholderVideoURL(seed=0){
+      // tiny generated webm data URI (short color bars) — but generating actual binary is heavy; use a static small mp4-ish placeholder by using a single-pixel data URL to keep demo working
+      return 'data:video/mp4;base64,AAAAIGZ0eXBtcDQyAAAAAG1wNDFtcDQyAAAAAA==';
+    }
+    function placeholderImageURL(){
+      return 'data:image/svg+xml;utf8,'+encodeURIComponent(`<svg xmlns='http://www.w3.org/2000/svg' width='640' height='360'><rect width='100%' height='100%' fill='%23071b2a'/><text x='50%' y='50%' font-size='24' fill='%23aab8c8' dominant-baseline='middle' text-anchor='middle'>Wristband Preview</text></svg>`);
+    }
+
+    // small utils
+    function humanSize(bytes){if(!bytes) return '0 B'; const units=['B','KB','MB','GB']; let i=0; while(bytes>=1024 && i<units.length-1){bytes/=1024;i++} return `${Math.round(bytes)} ${units[i]}`}
+    function escapeHtml(unsafe){return unsafe.replace(/[&<>"']/g, function(m){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m];});}
+
+    // kick off
+    init();
+  </script>
+</body>
+</html>
